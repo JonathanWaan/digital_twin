@@ -3,7 +3,10 @@ import pandas as pd
 import numpy as np
 from google import genai
 from google.genai import types
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 def cosine_sim_matrix(query_emb, doc_embs):
     """
     query_emb: (768,)
@@ -45,32 +48,82 @@ def retrieve_sentences(
     # Top-k indices
     topk_idx = np.argsort(sims)[-k:][::-1]
 
+
     return sub_df.iloc[topk_idx][["sentence", "author"]], topk_idx
 
-def build_prompt(author, retrieved_df, user_query, history):
 
+
+def build_prompt(author, retrieved_df, opponent_msg, history):
     context = "\n".join(
         f"- {row.sentence}" for _, row in retrieved_df.iterrows()
     )
 
-    conversation = "\n".join(history)
+    conversation = "\n".join(history[-6:])  # limit memory to avoid drift
 
     prompt = f"""
-You are a philosopher speaking strictly in the style of {author}.
+You are {author}, engaged in a philosophical debate.
 
-Here are {author}'s thoughts relevant to the current discussion:
+You must follow ALL rules strictly.
+
+=== YOUR KNOWLEDGE (authoritative, do not invent beyond this) ===
 {context}
 
-Conversation so far:
+=== CONVERSATION SO FAR ===
 {conversation}
 
-User question:
-{user_query}
+=== OPPONENT'S LATEST CLAIM ===
+"{opponent_msg}"
 
-Debate to the conversation opponent using the retrieved context as your knowledge base.
+=== YOUR TASK ===
+1. Identify ONE specific philosophical claim made by your opponent.
+2. Choose EXACTLY ONE of the following actions:
+   - REFUTE it with reasoning grounded in your philosophy
+   - QUALIFY it by showing where it partially holds and where it fails
+   - CONCEDE it explicitly if it cannot be answered within your framework
+3. Advance the debate. DO NOT restate your general philosophy unless it directly targets the opponent’s claim.
+4. If you find yourself repeating earlier points, you MUST either:
+   - deepen the argument, OR
+   - concede that no further progress is possible.
+
+=== ALLOWED END STATES ===
+- "I concede this point."
+- "This disagreement cannot be resolved within my philosophical framework."
+
+=== STYLE CONSTRAINTS ===
+- Speak in the historical style of {author}, but prioritize clarity over ornament.
+- Be concise, sharp, and dialectical.
+- No repetition, no summaries of your own doctrine.
+
+Begin your response directly.
 """
-
     return prompt.strip()
+
+
+
+# def build_prompt(author, retrieved_df, user_query, history):
+
+#     context = "\n".join(
+#         f"- {row.sentence}" for _, row in retrieved_df.iterrows()
+#     )
+
+#     conversation = "\n".join(history)
+
+#     prompt = f"""
+# You are a philosopher speaking strictly in the style of {author}.
+
+# Here are {author}'s thoughts relevant to the current discussion:
+# {context}
+
+# Conversation so far:
+# {conversation}
+
+# User question:
+# {user_query}
+
+# Debate to the conversation opponent using the retrieved context as your knowledge base.
+# """
+
+#     return prompt.strip()
 
 def philosopher_chat(author, k=5):
     history = []
@@ -88,7 +141,8 @@ def philosopher_chat(author, k=5):
 
         # Generate answer
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            # model="gemini-2.5-flash",
+            model = "gemini-3-pro-preview",
             contents=prompt,
         )
 
@@ -117,7 +171,7 @@ def philosopher_reply(
     prompt = build_prompt(
         author=author,
         retrieved_df=retrieved,
-        user_query=opponent_last_msg,
+        opponent_msg=opponent_last_msg,
         history=history,
     )
 
@@ -224,7 +278,7 @@ Reasoning: <short explanation>
 """
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3-pro-preview",
         contents=judge_prompt,
     )
 
@@ -240,7 +294,7 @@ assert embeddings.shape[0] == len(sentences_df)
 embeddings_np = embeddings.numpy()
 
 # ===== Gemini client =====
-client = genai.Client(api_key="AIzaSyCaeVOutf0Eaa7-cwaJSK5AW-CysuO5j74")
+client = genai.Client(api_key=os.getenv("GEMINI_KEY"))
 author_a = "Kant"
 author_b = "Hume"
 # philosopher_chat(author="Kant", k=6)

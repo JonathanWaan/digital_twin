@@ -77,44 +77,6 @@ def numpy_topk(query_emb, doc_embs, k):
     return np.argsort(sims)[-k:][::-1]
 
 
-# def retrieve_method(
-#     method_name: str,
-#     query_emb: np.ndarray,
-#     doc_embs: np.ndarray,
-#     k: int,
-# ):
-#     start = time.perf_counter()
-
-#     if method_name == "numpy_topk":
-#         idx = numpy_topk(query_emb, doc_embs, k)
-
-#     elif method_name == "numpy_topk_largeM":
-#         # simulate candidate-pool expansion (M > k)
-#         M = 50
-#         sims = doc_embs @ query_emb
-#         cand_idx = np.argsort(sims)[-M:]
-#         idx = cand_idx[np.argsort(sims[cand_idx])[-k:]][::-1]
-
-#     elif method_name == "random_baseline":
-#         idx = np.random.choice(len(doc_embs), size=k, replace=False)
-
-#     elif method_name == "topk_no_norm":
-#         sims = doc_embs @ query_emb  # intentionally skip normalization
-#         idx = np.argsort(sims)[-k:][::-1]
-
-#     elif method_name == "shuffled_topk":
-#         idx = numpy_topk(query_emb, doc_embs, k)
-#         np.random.shuffle(idx)
-
-#     else:
-#         raise ValueError(method_name)
-
-#     latency_ms = (time.perf_counter() - start) * 1000
-#     return idx, latency_ms
-
-
-
-
 def retrieve_method(
     method_name: str,
     query_emb: np.ndarray,
@@ -193,6 +155,14 @@ def run_rq1_experiment(
                 k,
                 faiss_indices=faiss_indices,
             )
+            if q_idx == 1:
+            # sentences_df.loc[mask]
+                query = retrieval_df.iloc[q_idx]['topic']
+                retrieved_sentence = (sentences_df.loc[mask].iloc[idx])
+                LLM_label_package = {"query": query, "retrieved_sentence": retrieved_sentence,"q_idx": q_idx, "method": method, "mask": mask, "idx": idx, "doc_emb":doc_embs[idx], "query_emb": query_emb}
+                # torch.save(LLM_label_package, f"results/experiment_results/LLM_label_package_{q_idx}_{method}.pt")
+                # torch.save(LLM_label_package, f"results/experiment_results/LLM_label_package_{q_idx}_{method}_emb.pt")
+                breakpoint()
 
 
             recall = len(set(idx) & set(gold_idx)) / k
@@ -214,53 +184,6 @@ def run_rq1_experiment(
 
     return pd.DataFrame(results)
 
-
-# def run_rq1_experiment(
-#     author="Hume",
-#     k=5,
-# ):
-
-#     mask = sentences_df["author"] == author
-#     doc_embs = embeddings_np[mask.values]
-
-#     methods = [
-#         "numpy_topk",
-#         "numpy_topk_largeM",
-#         "topk_no_norm",
-#         "shuffled_topk",
-#         "random_baseline",
-#     ]
-
-#     results = []
-
-#     for q_idx, row in retrieval_df.iterrows():
-#         query_text = row["topic"]
-#         query_emb = retrieval_embedding[q_idx].numpy()
-#         query_emb = query_emb / np.linalg.norm(query_emb)
-
-#         # gold standard
-#         gold_idx = numpy_topk(query_emb, doc_embs, k)
-
-#         for method in methods:
-#             idx, latency = retrieve_method(
-#                 method,
-#                 query_emb,
-#                 doc_embs,
-#                 k,
-#             )
-
-#             recall = len(set(idx) & set(gold_idx)) / k
-#             diversity = mean_pairwise_cosine_distance(doc_embs[idx])
-
-#             results.append({
-#                 "query_id": q_idx,
-#                 "method": method,
-#                 "latency_ms": latency,
-#                 "recall_at_k": recall,
-#                 "diversity": diversity,
-#             })
-
-#     return pd.DataFrame(results)
 
 def retrieve_sentences(
     query: str,
@@ -299,8 +222,8 @@ retrieval_embedding = torch.load("data/retrieval_embeddings_gemini.pt")
 
 AUTHORS = ["Hume", "Kant", "Plato", "Aristotle", "Nietzsche"]
 KS = [5, 10, 20, 50, 100,200]
-# AUTHORS = ['Hume']
-# KS = [200]
+AUTHORS = ['Hume']
+KS = [200]
 
 all_results = []
 
